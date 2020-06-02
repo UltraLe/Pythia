@@ -1,66 +1,46 @@
-import socket, threading
-from node import *
-import json
+import threading
+import socket
+
+from heartbeat.heartbeat import listen_nodes, send_beat, listen_beats
 
 host = "0.0.0.0"
-port = 5006
-STATE_ALIVE = "ALIVE"
-STATE_DEAD = "DEAD"
+# port used by bootstrap to accept new nodes
+# and send the list of the registered nodes
+ACCEPT_LIST_PORT = 1111
 
-ACTION_JOIN = "JOIN"
-ACTION_LIST = "LIST"
+# port used by nodes to receive beats
+BEATS_PORT = 1212
 
-nodes = []
+# time interval used to send beat to a server
+TIME_INTERVAL_SEC = 300
 
-class AcceptNewNode(threading.Thread):
-
-    def __init__(self, ip, port, clientsocket):
-        threading.Thread.__init__(self)
-        self.ip = ip
-        self.port = port
-        self.csocket = clientsocket
-
-    def run(self):
-
-        data = self.csocket.recv(2048)
-        decoded = data.decode("UTF-8")
-
-        jsonRequest = json.load(decoded)
-        action = jsonRequest["action"]
-        ip = jsonRequest["ip"]
-        lat = jsonRequest["lat"]
-        lon = jsonRequest["lon"]
-
-        if(action == ACTION_JOIN):
-            print("Adding : " + self.ip + ":" + str(self.port))
-            # adding new node
-            newNode = Node(STATE_ALIVE, ip, lat, lon)
-            nodes.append(newNode)
-        else:
-            print("Sending node list to : " + self.ip + ":" + str(self.port))
-            # TODO, iterate over active nodes and send json format of nodes
-
-        response = "Added"
-
-        # send ack
-        self.csocket.send(response.encode("utf-8"))
-
-        self.csocket.close()
+# if the beat is not sent back after this time
+# the node is set as inactive
+TIMEOUT_SEC = TIME_INTERVAL_SEC / 2
 
 
-tcpsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-tcpsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+def node_test():
+    tcpsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    tcpsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    tcpsock.bind((host, ACCEPT_LIST_PORT))
+    f = open("jsonListRequestSample.json", "r")
+    request = f.readlines()
+    print("Sending: "+request)
 
-tcpsock.bind((host, port))
+    tcpsock.send(request.encode("utf-8"))
 
-# TODO implement hear bit monitoring & sending nodes
+    response = tcpsock.recv(2048)
+    decoded = response.decode("UTF-8")
+    print("Join request response: " + decoded)
 
-while True:
-    tcpsock.listen(4)
-    print("Listening for incoming nodes...\n")
+    listen_beats(host, 1234)
 
-    (clientsock, (ip, port)) = tcpsock.accept()
 
-    # pass clientsock to the ClientThread thread object being created
-    newthread = AcceptNewNode(ip, port, clientsock)
-    newthread.start()
+
+t1 = threading.Thread(target=listen_nodes(host, ACCEPT_LIST_PORT))
+t1.start()
+print("Here")
+send_beat(TIME_INTERVAL_SEC, TIMEOUT_SEC)
+th = threading.Thread(target=node_test())
+th.start()
+

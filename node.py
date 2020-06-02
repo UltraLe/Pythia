@@ -1,10 +1,11 @@
 class Node:
 
-    def __init__(self, state, ip, lat, lon):
+    def __init__(self, state, ip, lat, lon, beatPort):
         self.lat = lat
         self.lon = lon
         self.ip = ip
         self.state = state
+        self.beatPort = beatPort
 
     def __getstate__(self):
         return self.state
