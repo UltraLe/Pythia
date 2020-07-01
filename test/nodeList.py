@@ -1,8 +1,7 @@
 import threading
-import socket
 from time import sleep
 
-from heartbeat.heartbeat import bootstrap_server_start, send_beats, listen_beats
+from heartbeat.heartbeat import fog_nodes_list_request
 
 host = "127.0.0.1"
 # port used by bootstrap to accept new nodes
@@ -12,21 +11,8 @@ ACCEPT_LIST_PORT = 11111
 
 def list_requestor():
     while 1:
+        fog_nodes_list_request(host, ACCEPT_LIST_PORT, 3, "1234.21", "1232.221")
         sleep(10)
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        f = open("../heartbeat/jsonListRequestSample.json", "r")
-        request = f.readlines()
-        r = ""
-        for x in request:
-            r += x
-        s.connect((host, ACCEPT_LIST_PORT))
-        s.send(r.encode("utf-8"))
-
-        response = s.recv(2048)
-        decoded = response.decode("UTF-8")
-        print("List received: \n"+decoded)
-        s.close()
-
 
 t5 = threading.Thread(target=list_requestor)
 t5.start()

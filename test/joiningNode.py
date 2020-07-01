@@ -1,39 +1,23 @@
-import json
 import threading
-import socket
-from time import sleep
 
-from heartbeat.heartbeat import bootstrap_server_start, send_beats, listen_beats
+from heartbeat.heartbeat import join_bootstrap
 
 host = "127.0.0.1"
 # port used by bootstrap to accept new nodes
 # and send the list of the registered nodes
 ACCEPT_LIST_PORT = 11111
 
-
-def node_test(joinRequestFile):
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    f = open(joinRequestFile, "r")
-    request = f.readlines()
-    r = ""
-    for x in request:
-        r += x
-    s.connect((host, ACCEPT_LIST_PORT))
-    beatPort = int(json.loads(r)["beatPort"])
-    s.send(r.encode("utf-8"))
-    response = s.recv(2048)
-    decoded = response.decode("UTF-8")
-    s.close()
-    listen_beats(host, beatPort)
-
 def n1():
-    node_test("joinRequestSample3.json")
+    join_bootstrap(25, "127.0.0.1", "1234.234", "3234.243", "127.0.0.1", ACCEPT_LIST_PORT,
+                   1234, 10)
 
 def n2():
-    node_test("joinRequestSample2.json")
+    join_bootstrap(25, "127.0.0.1", "2234.234", "5234.243", "127.0.0.1", ACCEPT_LIST_PORT,
+                   4321, 10)
 
 def n3():
-    node_test("../heartbeat/joinRequestSample.json")
+    join_bootstrap(25, "127.0.0.1", "1214.234", "1114.243", "127.0.0.1", ACCEPT_LIST_PORT,
+                   5555, 10)
 
 
 t3 = threading.Thread(target=n1)

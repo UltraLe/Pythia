@@ -4,16 +4,21 @@ import threading
 from time import sleep
 from math import radians, cos, sin, asin, sqrt
 
+from heartbeat.bootstrapRequest import BootstrapRequest
 from heartbeat.node import Node
 
 STATE_ALIVE = "ALIVE"
 STATE_DEAD = "DEAD"
-
 REQ_JOIN = "JOIN"
 REQ_LIST = "LIST"
+RESPONSE_ADDED = "ADDED"
 
 mutexAcceptedNodes = threading.Lock()
 acceptedNodes = []
+
+"""
+        SERVER SIDE
+"""
 
 
 class HeartBeatConnection(threading.Thread):
@@ -23,19 +28,6 @@ class HeartBeatConnection(threading.Thread):
         self.ip = clientip
         self.port = clientport
         self.clientsocket = clientsocket
-
-
-class SendBeatBack(HeartBeatConnection):
-
-    def run(self):
-        # if i am here, a the bootstrap is
-        # asking if the node that runs this function is alive
-        # no need to read the 'beat'
-        response = "ALIVE"
-
-        # HERE the self.clientsocket is the server bootstrap socket !
-        self.clientsocket.send(response.encode("utf-8"))
-        self.clientsocket.close()
 
 
 class AcceptNewNode(HeartBeatConnection):
@@ -54,7 +46,7 @@ class AcceptNewNode(HeartBeatConnection):
 
             ip = jsonRequest["ip"]
             beatPort = jsonRequest["beatPort"]
-            print("Join Request Accepted from: " + ip + ":" + beatPort + " from " + lat + "," + lon)
+            print("Join Request Accepted from: " + ip + ":" + str(beatPort) + " from " + lat + "," + lon)
 
             # adding the node
             newNode = Node(STATE_ALIVE, ip, lat, lon, beatPort)
@@ -63,7 +55,7 @@ class AcceptNewNode(HeartBeatConnection):
             acceptedNodes.append(newNode)
             mutexAcceptedNodes.release()
 
-            response = "Added"
+            response = RESPONSE_ADDED
 
         else:
             numFogNodes = jsonRequest["numFogNodes"]
@@ -103,21 +95,18 @@ def get_node_list(userLat, userLon, numNodes):
     mutexAcceptedNodes.acquire()
     orderedNodes = acceptedNodes.copy()
     mutexAcceptedNodes.release()
-    deadNodes = []
+    activeNodes = []
     for node in orderedNodes:
-        if node.state == STATE_DEAD:
-            deadNodes.append(node)
+        if node.state == STATE_ALIVE:
+            currDistance = abs(haversine(userLon, userLat, node.lon, node.lat))
+            node.distance_from_client = currDistance
+            activeNodes.append(node)
             continue
-        currDistance = abs(haversine(userLon, userLat, node.lon, node.lat))
-        node.distance_from_client = currDistance
         if orderedNodes.__len__() == numNodes:
             break
 
-    for node in deadNodes:
-        orderedNodes.remove(node)
-
-    orderedNodes.sort(key=lambda x: x.distance_from_client)
-    response = json.dumps(orderedNodes, default=obj_dict)
+    activeNodes.sort(key=lambda x: x.distance_from_client)
+    response = json.dumps(activeNodes, default=obj_dict)
     return response
 
 
@@ -201,18 +190,92 @@ def bootstrap_server_start(host, port):
         newthread.start()
 
 
+"""
+    CLIENT SIDE
+"""
+
+
+class SendBeatBack(HeartBeatConnection):
+
+    def run(self):
+        # if i am here, a the bootstrap is
+        # asking if the node that runs this function is alive
+        # no need to read the 'beat'
+        response = "ALIVE"
+
+        # HERE the self.clientsocket is the server bootstrap socket !
+        self.clientsocket.send(response.encode("utf-8"))
+        self.clientsocket.close()
+
+
 # function that has to be executed by a node (server fog) after that
 # he has correctly registered to the bootstrap by sending a join request
-def listen_beats(host, beatPort):
+def listen_beats(retryAfterSeconds, ip, lat, lon, bootstrapip, bootsrapport, beatPort, serverBootstrapTimeoutSec):
     # the server fog hs to the beats on the 'beatPort' that he has specified in the JOIN REQUEST !
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind((host, beatPort))
+    sock.bind((ip, beatPort))
 
+    # if the client that has already registered on the bootstrap
+    # does not hear beats coming form the bootstrap within
+    # serverBootstrapTimeoutSec seconds, it assume that the bootstrap has
+    # crashed and tries to join again.
     while True:
         sock.listen()
+        sock.settimeout(serverBootstrapTimeoutSec)
+        try:
+            (serversock, (serverip, serverport)) = sock.accept()
+            newthread = SendBeatBack(serverip, serverport, serversock)
+            newthread.start()
+            # if i am here the timer has to be restarted
+            sock.settimeout(None)
+        except socket.timeout:
+            sock.close()
+            # here i have to register again to the bootstrap
+            print("Cant hear beats from bootstrap from beatPort: " + str(beatPort) + ". Rejoining..")
+            join_bootstrap(retryAfterSeconds, ip, lat, lon, bootstrapip,
+                           bootsrapport, beatPort, serverBootstrapTimeoutSec)
 
-        (serversock, (serverip, serverport)) = sock.accept()
 
-        newthread = SendBeatBack(serverip, serverport, serversock)
-        newthread.start()
+# function executed to the clients that wants to register to the bootstrap
+def join_bootstrap(retryAfterSeconds, ip, lat, lon, bootstrapip, bootsrapport, beatPort, serverBootstrapTimeoutSec):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    # if the client cannot connect to the server bootstrap,
+    # raise exception, an try it again
+    while True:
+        try:
+            sock.connect((bootstrapip, bootsrapport))
+            # now the client is connected to the server, sending the join request
+            joinRequest = BootstrapRequest(REQ_JOIN, ip, lat, lon, None, beatPort)
+            jsonJoinRequest = json.dumps(joinRequest.__dict__)
+            encoded = jsonJoinRequest.encode("utf-8")
+            sock.send(encoded)
+            response = sock.recv(2048)
+            decoded = response.decode("UTF-8")
+            if decoded != RESPONSE_ADDED:
+                raise socket.error
+            break
+        except socket.error:
+            # retry after retryAfterSeconds
+            print("Bootstrap server seems to be down for "+str(beatPort)+", trying again soon...")
+            sleep(retryAfterSeconds)
+    print("BeatPort: "+str(beatPort)+" connected to bootstrap")
+    # now that the node has been accepted from the bootstrap,
+    # he can listen for server beats
+    listen_beats(retryAfterSeconds, ip, lat, lon, bootstrapip, bootsrapport, beatPort, serverBootstrapTimeoutSec)
+
+
+# function used to request the lists of node (a total of numFogNodes nodes) registered to the
+# bootstrap, ordered in increasing distance from the client that has done the request
+def fog_nodes_list_request(bootstrapip, bootstrapport, numFogNodes, clientlat, clientlon):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listRequest = BootstrapRequest(REQ_LIST, bootstrapip, clientlat, clientlon, numFogNodes, None)
+    jsonListRequest = json.dumps(listRequest.__dict__)
+
+    s.connect((bootstrapip, bootstrapport))
+    s.send(jsonListRequest.encode("utf-8"))
+
+    response = s.recv(2048)
+    decoded = response.decode("UTF-8")
+    print("List received: \n" + decoded)
+    s.close()
