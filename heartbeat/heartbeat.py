@@ -2,28 +2,31 @@ import json
 import socket
 import threading
 from time import sleep
+from math import radians, cos, sin, asin, sqrt
 
-from node import Node
+from heartbeat.node import Node
 
 STATE_ALIVE = "ALIVE"
 STATE_DEAD = "DEAD"
 
-ACTION_JOIN = "JOIN"
-ACTION_LIST = "LIST"
+REQ_JOIN = "JOIN"
+REQ_LIST = "LIST"
 
-mutexOnList = threading.Lock()
+mutexAcceptedNodes = threading.Lock()
 acceptedNodes = []
 
 
+# OK
 class HeartBeatConnection(threading.Thread):
 
-    def __init__(self, ip, port, clientsocket):
+    def __init__(self, clientip, clientport, clientsocket):
         threading.Thread.__init__(self)
-        self.ip = ip
-        self.port = port
-        self.csocket = clientsocket
+        self.ip = clientip
+        self.port = clientport
+        self.clientsocket = clientsocket
 
 
+# OK
 class SendBeatBack(HeartBeatConnection):
 
     def run(self):
@@ -31,148 +34,187 @@ class SendBeatBack(HeartBeatConnection):
         # asking if the node that runs this function is alive
         # no need to read the 'beat'
         response = "ALIVE"
-        self.csocket.send(response.encode("utf-8"))
-        self.csocket.close()
+
+        # HERE the self.clientsocket is the server bootstrap socket !
+        self.clientsocket.send(response.encode("utf-8"))
+        self.clientsocket.close()
 
 
+# OK
 class AcceptNewNode(HeartBeatConnection):
 
     def run(self):
 
-        data = self.csocket.recv(2048)
+        # receiving client request (JOIN or LIST)
+        data = self.clientsocket.recv(2048)
         decoded = data.decode("UTF-8")
+        jsonRequest = json.loads(decoded)
 
-        jsonRequest = json.load(decoded)
-        action = jsonRequest["action"]
+        lat = jsonRequest["lat"]
+        lon = jsonRequest["lon"]
 
-        if (action == ACTION_JOIN):
+        if jsonRequest["reqtype"] == REQ_JOIN:
 
             ip = jsonRequest["ip"]
-            serverLat = jsonRequest["lat"]
-            serverLon = jsonRequest["lon"]
             beatPort = jsonRequest["beatPort"]
-            print("Adding : " + self.ip + ":" + str(self.port))
-            # adding new node
-            newNode = Node(STATE_ALIVE, ip, serverLat, serverLon, beatPort)
+            print("Join Request Accepted from: " + ip + ":" + beatPort + " from " + lat + "," + lon)
 
-            mutexOnList.acquire()
+            # adding the node
+            newNode = Node(STATE_ALIVE, ip, lat, lon, beatPort)
+
+            mutexAcceptedNodes.acquire()
             acceptedNodes.append(newNode)
-            mutexOnList.release()
+            mutexAcceptedNodes.release()
 
             response = "Added"
+
         else:
+            numFogNodes = jsonRequest["numFogNodes"]
             print("Sending node list to : " + self.ip + ":" + str(self.port))
+            response = get_node_list(lat, lon, numFogNodes)
 
-            userLat = jsonRequest["lat"]
-            userLon = jsonRequest["lon"]
-            response = get_node_list(userLat, userLon)
-
-        self.csocket.send(response.encode("utf-8"))
-        self.csocket.close()
-
+        self.clientsocket.send(response.encode("utf-8"))
+        self.clientsocket.close()
         # after that the node has been added to the list,
         # the node itself has to launch the listenBeats function
         # in order to listen dor beats to respond to
 
 
+# formula used to calculate the distance in km between 2 points
+# in the globe, given their latitude and longitude
+def haversine(lon1, lat1, lon2, lat2):
+    """
+    Calculate the great circle distance between two points
+    on the earth (specified in decimal degrees)
+    """
+    # convert decimal degrees to radians
+    lon1, lat1, lon2, lat2 = map(radians, [float(lon1), float(lat1), float(lon2), float(lat2)])
+
+    # haversine formula
+    dlon = lon2 - lon1
+    dlat = lat2 - lat1
+    a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlon / 2) ** 2
+    c = 2 * asin(sqrt(a))
+    r = 6371  # Radius of earth in kilometers.
+    return c * r
+
+# OK
 # method that returns an array of nodes in json
-def get_node_list(userLat, userLon):
-    mutexOnList.acquire()
-    response = json.dumps(acceptedNodes)
-    mutexOnList.release()
+def get_node_list(userLat, userLon, numNodes):
+    # evaluating the distance between the client lat lon
+    # and the server registered
+    mutexAcceptedNodes.acquire()
+    orderedNodes = acceptedNodes.copy()
+    mutexAcceptedNodes.release()
 
-    # TODO select here the nodes that are nearest to
-    # the position given by  the user
+    for node in acceptedNodes:
+        currDistance = abs(haversine(userLon, userLat, node.lon, node.lat))
+        node.distance_from_client = currDistance
+        if orderedNodes.__len__() == numNodes:
+            break
 
-    print("Nodes: " + response)
-
+    orderedNodes.sort(key=lambda x: x.distance_from_client)
+    orderedNodes.sort(key=lambda x: x.distance_from_client)
+    response = json.dumps(orderedNodes, default=obj_dict)
     return response
 
 
+# used to retrieve the json of the node list
+def obj_dict(obj):
+    return obj.__dict__
+
+
+# OK
 class SendAndReceiveBeat(threading.Thread):
 
-    def __init__(self, ip, port, timeout):
+    def __init__(self, clientip, clientport, clienttimeout):
         threading.Thread.__init__(self)
-        self.ip = ip
-        self.port = port
+        self.clientip = clientip
+        self.clientport = clientport
         # it may be useful set a different timeout for different servers
-        self.timeout = timeout
+        self.clienttimeout = clienttimeout
+
+    def mark_node_inactive(self):
+        print("Node: " + self.clientip + ":" + self.clientport + " is inactive")
+        mutexAcceptedNodes.acquire()
+        for node in acceptedNodes:
+            if node.ip == self.clientip and node.beatPort == self.clientport:
+                node.state = STATE_DEAD
+                mutexAcceptedNodes.release()
+                break
 
     def run(self):
-        tcpsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        tcpsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        tcpsock.bind((self.ip, self.port))
+        # the server bootstrap has to connect to the client to send him th beat
+        serversock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-        beat = "Hey"
-        tcpsock.send(beat.encode("utf-8"))
-
-        # if beat is not received in X time, then mark the node as
-        # INACTIVE and return
-        tcpsock.listen()
-        tcpsock.settimeout(self.timeout)
-        print("Listening for incoming beats...\n")
-        beatRsponse = ""
+        # if the server bootstrap cannot connect to the client within clienttimeout seconds,
+        # raise exception...
+        serversock.settimeout(self.clienttimeout)
         try:
-            (clientsock, (ip, port)) = tcpsock.accept()
-            beatRsponse = clientsock.recv(2048)
-            clientsock.close()
-        except:
-            print("Node: "+self.ip+" is inactive")
-            mutexOnList.acquire()
-            for node in acceptedNodes:
-                if node.ip == self.ip:
-                    node.state = STATE_DEAD
-                    mutexOnList.release()
-                    break
+            serversock.connect((self.clientip, int(self.clientport)))
+        except socket.timeout:
+            # the server cannot connect to the client, the node is incative
+            self.mark_node_inactive()
+            serversock.close()
+            return
 
-        print("Response: " + beatRsponse.decode("utf-8") + " From: " + self.ip)
+        # resetting timer
+        serversock.settimeout(None)
+        beat = "Hey"
+        serversock.settimeout(self.clienttimeout)
+        try:
+            serversock.send(beat.encode("utf-8"))
+            beatRsponse = serversock.recv(2048)
+            serversock.close()
+        except socket.timeout:
+            self.mark_node_inactive()
+            serversock.close()
+            return
+
+        print("Response: " + beatRsponse.decode("utf-8") + " From: " + self.clientip + ":" + self.clientport)
 
 
-def send_beat(timeInterval, timeout):
+# OK
+def send_beats(bootstrapTimeInterval, clientTimeout):
     while True:
-        print("Waiting for beats")
-        sleep(timeInterval)
+        sleep(bootstrapTimeInterval)
 
-        mutexOnList.acquire()
+        mutexAcceptedNodes.acquire()
         for node in acceptedNodes:
-            t = SendAndReceiveBeat(node.ip, node.beatPort, timeout)
+            t = SendAndReceiveBeat(node.ip, node.beatPort, clientTimeout)
             t.start()
-
-        # remove after debugging
-        for node in acceptedNodes:
-            print("Node: "+node.ip+" Status: "+node.state)
-        mutexOnList.release()
+        mutexAcceptedNodes.release()
 
 
-def listen_nodes(host, port):
-    tcpsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    tcpsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    tcpsock.bind((host, port))
+# OK
+def bootstrap_server_start(host, port):
+    serversock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    serversock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    serversock.bind((host, port))
 
     while True:
-        tcpsock.listen()
-        print("Listening for incoming nodes...\n")
+        serversock.listen()
 
-        (clientsock, (ip, port)) = tcpsock.accept()
+        (clientsock, (clientip, clientport)) = serversock.accept()
 
         # pass clientsock to the ClientThread thread object being created
-        newthread = AcceptNewNode(ip, port, clientsock)
+        newthread = AcceptNewNode(clientip, clientport, clientsock)
         newthread.start()
 
 
+# OK
 # function that has to be executed by a node (server fog) after that
 # he has correctly registered to the bootstrap by sending a join request
-def listen_beats(host, port):
-    tcpsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    tcpsock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    tcpsock.bind((host, port))
+def listen_beats(host, beatPort):
+    # the server fog hs to the beats on the 'beatPort' that he has specified in the JOIN REQUEST !
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind((host, beatPort))
 
     while True:
-        tcpsock.listen()
-        print("Listening for incoming beats...\n")
+        sock.listen()
 
-        (clientsock, (ip, port)) = tcpsock.accept()
+        (serversock, (serverip, serverport)) = sock.accept()
 
-        # pass clientsock to the ClientThread thread object being created
-        newthread = SendBeatBack(ip, port, clientsock)
+        newthread = SendBeatBack(serverip, serverport, serversock)
         newthread.start()
