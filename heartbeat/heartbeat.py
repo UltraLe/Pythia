@@ -16,7 +16,6 @@ mutexAcceptedNodes = threading.Lock()
 acceptedNodes = []
 
 
-# OK
 class HeartBeatConnection(threading.Thread):
 
     def __init__(self, clientip, clientport, clientsocket):
@@ -26,7 +25,6 @@ class HeartBeatConnection(threading.Thread):
         self.clientsocket = clientsocket
 
 
-# OK
 class SendBeatBack(HeartBeatConnection):
 
     def run(self):
@@ -40,7 +38,6 @@ class SendBeatBack(HeartBeatConnection):
         self.clientsocket.close()
 
 
-# OK
 class AcceptNewNode(HeartBeatConnection):
 
     def run(self):
@@ -70,7 +67,7 @@ class AcceptNewNode(HeartBeatConnection):
 
         else:
             numFogNodes = jsonRequest["numFogNodes"]
-            print("Sending node list to : " + self.ip + ":" + str(self.port))
+            # print("Sending node list to : " + self.ip + ":" + str(self.port))
             response = get_node_list(lat, lon, numFogNodes)
 
         self.clientsocket.send(response.encode("utf-8"))
@@ -98,7 +95,7 @@ def haversine(lon1, lat1, lon2, lat2):
     r = 6371  # Radius of earth in kilometers.
     return c * r
 
-# OK
+
 # method that returns an array of nodes in json
 def get_node_list(userLat, userLon, numNodes):
     # evaluating the distance between the client lat lon
@@ -106,14 +103,19 @@ def get_node_list(userLat, userLon, numNodes):
     mutexAcceptedNodes.acquire()
     orderedNodes = acceptedNodes.copy()
     mutexAcceptedNodes.release()
-
-    for node in acceptedNodes:
+    deadNodes = []
+    for node in orderedNodes:
+        if node.state == STATE_DEAD:
+            deadNodes.append(node)
+            continue
         currDistance = abs(haversine(userLon, userLat, node.lon, node.lat))
         node.distance_from_client = currDistance
         if orderedNodes.__len__() == numNodes:
             break
 
-    orderedNodes.sort(key=lambda x: x.distance_from_client)
+    for node in deadNodes:
+        orderedNodes.remove(node)
+
     orderedNodes.sort(key=lambda x: x.distance_from_client)
     response = json.dumps(orderedNodes, default=obj_dict)
     return response
@@ -124,7 +126,6 @@ def obj_dict(obj):
     return obj.__dict__
 
 
-# OK
 class SendAndReceiveBeat(threading.Thread):
 
     def __init__(self, clientip, clientport, clienttimeout):
@@ -135,7 +136,7 @@ class SendAndReceiveBeat(threading.Thread):
         self.clienttimeout = clienttimeout
 
     def mark_node_inactive(self):
-        print("Node: " + self.clientip + ":" + self.clientport + " is inactive")
+        # print("Node: " + self.clientip + ":" + self.clientport + " is inactive")
         mutexAcceptedNodes.acquire()
         for node in acceptedNodes:
             if node.ip == self.clientip and node.beatPort == self.clientport:
@@ -152,7 +153,7 @@ class SendAndReceiveBeat(threading.Thread):
         serversock.settimeout(self.clienttimeout)
         try:
             serversock.connect((self.clientip, int(self.clientport)))
-        except socket.timeout:
+        except (socket.timeout, socket.error) as e:
             # the server cannot connect to the client, the node is incative
             self.mark_node_inactive()
             serversock.close()
@@ -171,10 +172,9 @@ class SendAndReceiveBeat(threading.Thread):
             serversock.close()
             return
 
-        print("Response: " + beatRsponse.decode("utf-8") + " From: " + self.clientip + ":" + self.clientport)
+        # print("Response: " + beatRsponse.decode("utf-8") + " From: " + self.clientip + ":" + self.clientport)
 
 
-# OK
 def send_beats(bootstrapTimeInterval, clientTimeout):
     while True:
         sleep(bootstrapTimeInterval)
@@ -186,7 +186,6 @@ def send_beats(bootstrapTimeInterval, clientTimeout):
         mutexAcceptedNodes.release()
 
 
-# OK
 def bootstrap_server_start(host, port):
     serversock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     serversock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -202,7 +201,6 @@ def bootstrap_server_start(host, port):
         newthread.start()
 
 
-# OK
 # function that has to be executed by a node (server fog) after that
 # he has correctly registered to the bootstrap by sending a join request
 def listen_beats(host, beatPort):

@@ -26,12 +26,19 @@ def node_test(joinRequestFile):
     s.close()
     listen_beats(host, beatPort)
 
+def n1():
+    node_test("joinRequestSample3.json")
 
-t3 = threading.Thread(target=node_test("joinRequestSample3.json"))
-t3.start()
+def n2():
+    node_test("joinRequestSample2.json")
 
-t3 = threading.Thread(target=node_test("joinRequestSample3.json"))
-t3.start()
+def n3():
+    node_test("../heartbeat/joinRequestSample.json")
 
-t3 = threading.Thread(target=node_test("../heartbeat/joinRequestSample3.json"))
+
+t3 = threading.Thread(target=n1)
 t3.start()
+t4 = threading.Thread(target=n2)
+t4.start()
+t5 = threading.Thread(target=n3)
+t5.start()
