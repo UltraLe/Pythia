@@ -36,7 +36,8 @@ class AcceptNewNode(HeartBeatConnection):
 
         # receiving client request (JOIN or LIST)
         data = self.clientsocket.recv(2048)
-        decoded = data.decode("UTF-8")
+        decoded = data.decode("UTF")
+        print(decoded)
         jsonRequest = json.loads(decoded)
 
         lat = jsonRequest["lat"]
@@ -59,7 +60,7 @@ class AcceptNewNode(HeartBeatConnection):
 
         else:
             numFogNodes = jsonRequest["numFogNodes"]
-            # print("Sending node list to : " + self.ip + ":" + str(self.port))
+            print("Sending node list to : " + self.ip + ":" + str(self.port))
             response = get_node_list(lat, lon, numFogNodes)
 
         self.clientsocket.send(response.encode("utf-8"))

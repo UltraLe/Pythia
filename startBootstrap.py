@@ -2,7 +2,7 @@ import threading
 
 from heartbeat.heartbeat import bootstrap_server_start, send_beats
 
-host = "127.0.0.1"
+host = "0.0.0.0"
 # port used by bootstrap to accept new nodes
 # and send the list of the registered nodes
 ACCEPT_LIST_PORT = 11111
