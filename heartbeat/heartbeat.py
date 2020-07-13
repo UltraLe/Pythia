@@ -37,7 +37,6 @@ class AcceptNewNode(HeartBeatConnection):
         # receiving client request (JOIN or LIST)
         data = self.clientsocket.recv(2048)
         decoded = data.decode("UTF")
-        print(decoded)
         jsonRequest = json.loads(decoded)
 
         lat = jsonRequest["lat"]
@@ -47,7 +46,7 @@ class AcceptNewNode(HeartBeatConnection):
 
             ip = jsonRequest["ip"]
             beatPort = jsonRequest["beatPort"]
-            print("Join Request Accepted from: " + ip + ":" + str(beatPort) + " from " + lat + "," + lon)
+            # print("Join Request Accepted from: " + ip + ":" + str(beatPort) + " from " + lat + "," + lon)
 
             # adding the node
             newNode = Node(STATE_ALIVE, ip, lat, lon, beatPort)
