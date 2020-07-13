@@ -46,20 +46,30 @@ class AcceptNewNode(HeartBeatConnection):
 
             ip = jsonRequest["ip"]
             beatPort = jsonRequest["beatPort"]
-            # print("Join Request Accepted from: " + ip + ":" + str(beatPort) + " from " + lat + "," + lon)
+            # print("Join Request from: " + ip + ":" + str(beatPort) + " from " + lat + "," + lon)
 
             # adding the node
             newNode = Node(STATE_ALIVE, ip, lat, lon, beatPort)
 
+            # but only if it is not been altrady added
+            replica = False
             mutexAcceptedNodes.acquire()
-            acceptedNodes.append(newNode)
+            for node in acceptedNodes:
+                if node.ip == newNode.ip and node.beatPort == newNode.beatPort:
+                    replica = True
+                    node.state = STATE_ALIVE
+                    break
+
+            if not replica:
+                acceptedNodes.append(newNode)
+
             mutexAcceptedNodes.release()
 
             response = RESPONSE_ADDED
 
         else:
             numFogNodes = jsonRequest["numFogNodes"]
-            print("Sending node list to : " + self.ip + ":" + str(self.port))
+            # print("Sending node list to : " + self.ip + ":" + str(self.port))
             response = get_node_list(lat, lon, numFogNodes)
 
         self.clientsocket.send(response.encode("utf-8"))
@@ -125,7 +135,7 @@ class SendAndReceiveBeat(threading.Thread):
         self.clienttimeout = clienttimeout
 
     def mark_node_inactive(self):
-        # print("Node: " + self.clientip + ":" + self.clientport + " is inactive")
+        # print("Node: " + self.clientip + ":" + str(self.clientport) + " is inactive")
         mutexAcceptedNodes.acquire()
         for node in acceptedNodes:
             if node.ip == self.clientip and node.beatPort == self.clientport:
@@ -142,7 +152,7 @@ class SendAndReceiveBeat(threading.Thread):
         serversock.settimeout(self.clienttimeout)
         try:
             serversock.connect((self.clientip, int(self.clientport)))
-        except (socket.timeout, socket.error) as e:
+        except:
             # the server cannot connect to the client, the node is incative
             self.mark_node_inactive()
             serversock.close()
@@ -161,7 +171,7 @@ class SendAndReceiveBeat(threading.Thread):
             serversock.close()
             return
 
-        # print("Response: " + beatRsponse.decode("utf-8") + " From: " + self.clientip + ":" + self.clientport)
+        # print("Response: " + beatRsponse.decode("utf-8") + " From: " + self.clientip + ":" + str(self.clientport))
 
 
 def send_beats(bootstrapTimeInterval, clientTimeout):
@@ -232,18 +242,19 @@ def listen_beats(retryAfterSeconds, ip, lat, lon, bootstrapip, bootsrapport, bea
         except socket.timeout:
             sock.close()
             # here i have to register again to the bootstrap
-            print("Cant hear beats from bootstrap from beatPort: " + str(beatPort) + ". Rejoining..")
+            # print("Cant hear beats from bootstrap from beatPort: " + str(beatPort) + ". Rejoining..")
             join_bootstrap(retryAfterSeconds, ip, lat, lon, bootstrapip,
                            bootsrapport, beatPort, serverBootstrapTimeoutSec)
 
 
 # function executed to the clients that wants to register to the bootstrap
 def join_bootstrap(retryAfterSeconds, ip, lat, lon, bootstrapip, bootsrapport, beatPort, serverBootstrapTimeoutSec):
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
     # if the client cannot connect to the server bootstrap,
     # raise exception, an try it again
     while True:
         try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.connect((bootstrapip, bootsrapport))
             # now the client is connected to the server, sending the join request
             joinRequest = BootstrapRequest(REQ_JOIN, ip, lat, lon, None, beatPort)
