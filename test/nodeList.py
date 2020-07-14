@@ -1,6 +1,8 @@
 import threading
 from time import sleep
 
+os.chdir("/home/capo80/Desktop/Pythia")
+
 from heartbeat.heartbeat import fog_nodes_list_request
 
 host = "127.0.0.1"
