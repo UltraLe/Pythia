@@ -46,7 +46,7 @@ class AcceptNewNode(HeartBeatConnection):
 
             ip = jsonRequest["ip"]
             beatPort = jsonRequest["beatPort"]
-            # print("Join Request from: " + ip + ":" + str(beatPort) + " from " + lat + "," + lon)
+            print("Join Request from: " + ip + ":" + str(beatPort) + " from " + lat + "," + lon)
 
             # adding the node
             newNode = Node(STATE_ALIVE, ip, lat, lon, beatPort)
@@ -69,7 +69,7 @@ class AcceptNewNode(HeartBeatConnection):
 
         else:
             numFogNodes = jsonRequest["numFogNodes"]
-            # print("Sending node list to : " + self.ip + ":" + str(self.port))
+            print("Sending node list to : " + self.ip + ":" + str(self.port))
             response = get_node_list(lat, lon, numFogNodes)
 
         self.clientsocket.send(response.encode("utf-8"))
