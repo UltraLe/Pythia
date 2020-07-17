@@ -1,7 +1,9 @@
 import threading
 from time import sleep
 
-os.chdir("/home/capo80/Desktop/Pythia")
+import sys
+
+sys.path.insert(1, '/home/ezio/Scrivania/Pythia')
 
 from heartbeat.heartbeat import fog_nodes_list_request
 
@@ -13,7 +15,7 @@ ACCEPT_LIST_PORT = 11111
 
 def list_requestor():
     while 1:
-        fog_nodes_list_request(host, ACCEPT_LIST_PORT, 3, "1234.21", "1232.221")
+        fog_nodes_list_request(host, ACCEPT_LIST_PORT, 10, "1234.21", "1232.221")
         sleep(10)
 
 t5 = threading.Thread(target=list_requestor)

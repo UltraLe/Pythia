@@ -358,13 +358,15 @@ def flood_node_list():
     import subprocess
 
     while True:
-        a = subprocess.check_output("dig +short "+BOOTSTRAP_DOMAIN_NAME, shell=True)
-        b = a.splitlines()
-        bootstrapIpList = b[:-1]
-        print(bootstrapIpList)
+        # a = subprocess.check_output("dig +short "+BOOTSTRAP_DOMAIN_NAME, shell=True)
+        # b = a.splitlines()
+        # bootstrapIpList = b[:-1]
+        #
+        bootstrapIpList = {"10.42.0.2", "10.42.0.1"}
         # test raspberry and pc
-        # bootstrapIpList = {"10.42.0.2", "10.42.0.1"}
-        myip = subprocess.check_output("dig +short myip.opendns.com @resolver1.opendns.com", shell=True)
+
+        # myip = subprocess.check_output("dig +short myip.opendns.com @resolver1.opendns.com", shell=True)
+        myip = "10.42.0.1"
 
         for bootStrapIP in bootstrapIpList:
             if bootStrapIP == myip:
@@ -377,10 +379,14 @@ def flood_node_list():
                 mutexAcceptedNodes.acquire()
                 nodes = acceptedNodes.copy()
                 mutexAcceptedNodes.release()
+                n = []
+                for node in nodes:
+                    n.append(json.dumps(node.__dict__))
+
                 floodRequest['nodes'] = nodes
 
-                jsonRequest = json.dumps(nodes)
-
+                jsonRequest = json.dumps(floodRequest)
+                print("Flooding theese informations: ", jsonRequest)
                 s.connect((bootStrapIP, ACCEPT_LIST_PORT))
                 s.send(jsonRequest.encode("utf-8"))
             except:

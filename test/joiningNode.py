@@ -3,10 +3,9 @@ import threading
 # Aggiunto perchè a me non funziona il path -Pasquale
 import sys
 
-sys.path.insert(1, '/home/capo80/Desktop/Pythia')
-
 from heartbeat.heartbeat import join_bootstrap
 
+sys.path.insert(1, '/home/ezio/Scrivania/Pythia')
 
 # port used by bootstrap to accept new nodes
 # and send the list of the registered nodes
