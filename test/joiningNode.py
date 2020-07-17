@@ -2,10 +2,8 @@ import threading
 
 # Aggiunto perchè a me non funziona il path -Pasquale
 import sys
-
-from heartbeat.heartbeat import join_bootstrap
-
 sys.path.insert(1, '/home/ezio/Scrivania/Pythia')
+from heartbeat.heartbeat import join_bootstrap
 
 # port used by bootstrap to accept new nodes
 # and send the list of the registered nodes
@@ -14,15 +12,15 @@ REAL_IP = "127.0.0.1"
 
 def n1():
     join_bootstrap(25, REAL_IP, "1234.234", "3234.243", "127.0.0.1", ACCEPT_LIST_PORT,
-                   1234, 10)
+                   8234, 10)
 
 def n2():
     join_bootstrap(25, REAL_IP, "2234.234", "5234.243", "127.0.0.1", ACCEPT_LIST_PORT,
-                   4321, 10)
+                   8321, 10)
 
 def n3():
     join_bootstrap(25, REAL_IP, "1214.234", "1114.243", "127.0.0.1", ACCEPT_LIST_PORT,
-                   5555, 10)
+                   8555, 10)
 
 
 t3 = threading.Thread(target=n1)

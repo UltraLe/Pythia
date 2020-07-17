@@ -2,9 +2,7 @@ import threading
 from time import sleep
 
 import sys
-
 sys.path.insert(1, '/home/ezio/Scrivania/Pythia')
-
 from heartbeat.heartbeat import fog_nodes_list_request
 
 host = "127.0.0.1"

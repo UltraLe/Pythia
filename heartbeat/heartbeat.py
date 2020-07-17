@@ -91,8 +91,19 @@ class AcceptNewNode(HeartBeatConnection):
             mutexFloodedNodes.acquire()
 
             for node in nodes:
-                newNode = Node(node['state'], node['ip'], node['lat'], node['lon'], node['beatPort'])
-                floodedNodes.append(newNode)
+                nd = json.loads(node)
+                newNode = Node(nd['state'], nd['ip'], nd['lat'], nd['lon'], nd['beatPort'])
+
+                AddNode = True
+                for receivedNode in floodedNodes:
+                    # add node only if the node was not received earlier
+                    if newNode.ip == receivedNode.ip and receivedNode.beatPort == newNode.beatPort:
+                        receivedNode.state = newNode.state
+                        AddNode = False
+                        break
+
+                if(AddNode):
+                    floodedNodes.append(newNode)
             mutexFloodedNodes.release()
 
             # not needed a response for that
