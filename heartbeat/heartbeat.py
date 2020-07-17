@@ -337,7 +337,7 @@ def flood_node_list():
 
     while True:
         a = subprocess.check_output("dig +short "+BOOTSTRAP_DOMAIN_NAME, shell=True)
-        b = a.split('\n')
+        b = a.splitlines()
         bootstrapIpList = b[:-1]
         print(bootstrapIpList)
 
