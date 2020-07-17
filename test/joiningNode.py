@@ -11,7 +11,7 @@ from heartbeat.heartbeat import join_bootstrap
 # port used by bootstrap to accept new nodes
 # and send the list of the registered nodes
 ACCEPT_LIST_PORT = 11111
-REAL_IP = "172.74.2.203"
+REAL_IP = "127.0.0.1"
 
 def n1():
     join_bootstrap(25, REAL_IP, "1234.234", "3234.243", "127.0.0.1", ACCEPT_LIST_PORT,

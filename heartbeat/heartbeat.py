@@ -13,6 +13,10 @@ REQ_JOIN = "JOIN"
 REQ_LIST = "LIST"
 FLOOD_INFO = "FLOODING"
 RESPONSE_ADDED = "ADDED"
+MAX_IGNORED_BEATS = 4
+
+# key = ip:port, value = num of beat ignored
+inactive_nodes = {}
 
 FLOOD_INTERVAL = 5
 BOOTSTRAP_DOMAIN_NAME = "www.whatacoolbootstrapip.it"
@@ -170,12 +174,24 @@ class SendAndReceiveBeat(threading.Thread):
         self.clienttimeout = clienttimeout
 
     def mark_node_inactive(self):
-        # print("Node: " + self.clientip + ":" + str(self.clientport) + " is inactive")
+        print("Node: " + self.clientip + ":" + str(self.clientport) + " is inactive")
         mutexAcceptedNodes.acquire()
         for node in acceptedNodes:
             if node.ip == self.clientip and node.beatPort == self.clientport:
                 node.state = STATE_DEAD
                 mutexAcceptedNodes.release()
+
+                if node.ip + str(node.beatPort) not in inactive_nodes.keys():
+                    inactive_nodes[node.ip+str(node.beatPort)] = 1
+                else:
+                    if inactive_nodes[node.ip + str(node.beatPort)] > MAX_IGNORED_BEATS:
+                        # remove node from acceptedNodes
+                        mutexAcceptedNodes.acquire()
+                        acceptedNodes.remove(node)
+                        mutexAcceptedNodes.release()
+                    else:
+                        inactive_nodes[node.ip + str(node.beatPort)] += 1
+
                 break
 
     def run(self):
@@ -218,6 +234,12 @@ def send_beats(bootstrapTimeInterval, clientTimeout):
         for node in acceptedNodes:
             t = SendAndReceiveBeat(node.ip, node.beatPort, clientTimeout)
             t.start()
+        mutexAcceptedNodes.release()
+
+        # TODO remove after debugging
+        mutexAcceptedNodes.acquire()
+        for node in acceptedNodes:
+            print("Node: {}:{}->{}".format(node.ip, node.beatPort, node.state))
         mutexAcceptedNodes.release()
 
 
@@ -340,8 +362,13 @@ def flood_node_list():
         b = a.splitlines()
         bootstrapIpList = b[:-1]
         print(bootstrapIpList)
+        # test raspberry and pc
+        # bootstrapIpList = {"10.42.0.2", "10.42.0.1"}
+        myip = subprocess.check_output("dig +short myip.opendns.com @resolver1.opendns.com", shell=True)
 
         for bootStrapIP in bootstrapIpList:
+            if bootStrapIP == myip:
+                continue
             # send list to other bootstraps
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
