@@ -11,10 +11,18 @@ STATE_ALIVE = "ALIVE"
 STATE_DEAD = "DEAD"
 REQ_JOIN = "JOIN"
 REQ_LIST = "LIST"
+FLOOD_INFO = "FLOODING"
 RESPONSE_ADDED = "ADDED"
+
+FLOOD_INTERVAL = 5
+BOOTSTRAP_DOMAIN_NAME = "www.whatacoolbootstrapip.it"
+ACCEPT_LIST_PORT = 11111
 
 mutexAcceptedNodes = threading.Lock()
 acceptedNodes = []
+
+floodedNodes = []
+mutexFloodedNodes = threading.Lock()
 
 """
         SERVER SIDE
@@ -39,8 +47,9 @@ class AcceptNewNode(HeartBeatConnection):
         decoded = data.decode("UTF")
         jsonRequest = json.loads(decoded)
 
-        lat = jsonRequest["lat"]
-        lon = jsonRequest["lon"]
+        if jsonRequest["reqtype"] != FLOOD_INFO:
+            lat = jsonRequest["lat"]
+            lon = jsonRequest["lon"]
 
         if jsonRequest["reqtype"] == REQ_JOIN:
 
@@ -67,10 +76,24 @@ class AcceptNewNode(HeartBeatConnection):
 
             response = RESPONSE_ADDED
 
-        else:
+        elif jsonRequest["reqtype"] == REQ_LIST:
             numFogNodes = jsonRequest["numFogNodes"]
             print("Sending node list to : " + self.ip + ":" + str(self.port))
             response = get_node_list(lat, lon, numFogNodes)
+
+        else:
+            # jsonRequest["reqtype"] == FLOOD_INFO
+            nodes = jsonRequest['nodes']
+            mutexFloodedNodes.acquire()
+
+            for node in nodes:
+                newNode = Node(node['state'], node['ip'], node['lat'], node['lon'], node['beatPort'])
+                floodedNodes.append(newNode)
+            mutexFloodedNodes.release()
+
+            # not needed a response for that
+            self.clientsocket.close()
+            return
 
         self.clientsocket.send(response.encode("utf-8"))
         self.clientsocket.close()
@@ -103,10 +126,22 @@ def get_node_list(userLat, userLon, numNodes):
     # evaluating the distance between the client lat lon
     # and the server registered
     mutexAcceptedNodes.acquire()
+    mutexFloodedNodes.acquire()
     orderedNodes = acceptedNodes.copy()
+    floodedOrderedNodes = floodedNodes.copy()
     mutexAcceptedNodes.release()
+    mutexFloodedNodes.release()
     activeNodes = []
     for node in orderedNodes:
+        if node.state == STATE_ALIVE:
+            currDistance = abs(haversine(userLon, userLat, node.lon, node.lat))
+            node.distance_from_client = currDistance
+            activeNodes.append(node)
+            continue
+        if orderedNodes.__len__() == numNodes:
+            break
+
+    for node in floodedOrderedNodes:
         if node.state == STATE_ALIVE:
             currDistance = abs(haversine(userLon, userLat, node.lon, node.lat))
             node.distance_from_client = currDistance
@@ -166,6 +201,7 @@ class SendAndReceiveBeat(threading.Thread):
             serversock.send(beat.encode("utf-8"))
             beatRsponse = serversock.recv(2048)
             serversock.close()
+
         except socket.timeout:
             self.mark_node_inactive()
             serversock.close()
@@ -249,7 +285,6 @@ def listen_beats(retryAfterSeconds, ip, lat, lon, bootstrapip, bootsrapport, bea
 
 # function executed to the clients that wants to register to the bootstrap
 def join_bootstrap(retryAfterSeconds, ip, lat, lon, bootstrapip, bootsrapport, beatPort, serverBootstrapTimeoutSec):
-
     # if the client cannot connect to the server bootstrap,
     # raise exception, an try it again
     while True:
@@ -268,9 +303,9 @@ def join_bootstrap(retryAfterSeconds, ip, lat, lon, bootstrapip, bootsrapport, b
             break
         except socket.error:
             # retry after retryAfterSeconds
-            print("Bootstrap server seems to be down for "+str(beatPort)+", trying again soon...")
+            print("Bootstrap server seems to be down for " + str(beatPort) + ", trying again soon...")
             sleep(retryAfterSeconds)
-    print("BeatPort: "+str(beatPort)+" connected to bootstrap")
+    print("BeatPort: " + str(beatPort) + " connected to bootstrap")
     # now that the node has been accepted from the bootstrap,
     # he can listen for server beats
     listen_beats(retryAfterSeconds, ip, lat, lon, bootstrapip, bootsrapport, beatPort, serverBootstrapTimeoutSec)
@@ -290,3 +325,40 @@ def fog_nodes_list_request(bootstrapip, bootstrapport, numFogNodes, clientlat, c
     decoded = response.decode("UTF-8")
     print("List received: \n" + decoded)
     s.close()
+
+
+"""
+    MULTIPLE BOOTSTRAP HANDLING
+"""
+
+
+def flood_node_list():
+    import subprocess
+
+    while True:
+        a = subprocess.check_output("dig +short "+BOOTSTRAP_DOMAIN_NAME, shell=True)
+        b = a.split('\n')
+        bootstrapIpList = b[:-1]
+        print(bootstrapIpList)
+
+        for bootStrapIP in bootstrapIpList:
+            # send list to other bootstraps
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                floodRequest = {}
+                floodRequest['reqtype'] = FLOOD_INFO
+                mutexAcceptedNodes.acquire()
+                nodes = acceptedNodes.copy()
+                mutexAcceptedNodes.release()
+                floodRequest['nodes'] = nodes
+
+                jsonRequest = json.dumps(nodes)
+
+                s.connect((bootStrapIP, ACCEPT_LIST_PORT))
+                s.send(jsonRequest.encode("utf-8"))
+            except:
+                continue
+
+            s.close()
+
+        sleep(FLOOD_INTERVAL)
