@@ -13,7 +13,7 @@ REQ_JOIN = "JOIN"
 REQ_LIST = "LIST"
 FLOOD_INFO = "FLOODING"
 RESPONSE_ADDED = "ADDED"
-MAX_IGNORED_BEATS = 4
+MAX_IGNORED_BEATS = 2
 
 # key = ip:port, value = num of beat ignored
 inactive_nodes = {}
@@ -236,12 +236,6 @@ def send_beats(bootstrapTimeInterval, clientTimeout):
             t.start()
         mutexAcceptedNodes.release()
 
-        # TODO remove after debugging
-        mutexAcceptedNodes.acquire()
-        for node in acceptedNodes:
-            print("Node: {}:{}->{}".format(node.ip, node.beatPort, node.state))
-        mutexAcceptedNodes.release()
-
 
 def bootstrap_server_start(host, port):
     serversock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -383,7 +377,7 @@ def flood_node_list():
                 for node in nodes:
                     n.append(json.dumps(node.__dict__))
 
-                floodRequest['nodes'] = nodes
+                floodRequest['nodes'] = n
 
                 jsonRequest = json.dumps(floodRequest)
                 print("Flooding theese informations: ", jsonRequest)
