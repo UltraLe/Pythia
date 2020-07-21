@@ -391,7 +391,7 @@ def flood_node_list():
                 floodRequest['nodes'] = n
 
                 jsonRequest = json.dumps(floodRequest)
-                print("Flooding theese informations: ", jsonRequest)
+                # print("Flooding theese informations: ", jsonRequest)
                 s.connect((bootStrapIP, ACCEPT_LIST_PORT))
                 s.send(jsonRequest.encode("utf-8"))
             except:

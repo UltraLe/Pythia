@@ -8,7 +8,7 @@ host = "0.0.0.0"
 ACCEPT_LIST_PORT = 11111
 
 # time interval used to send beat to a server
-BEAT_RATE_SEC = 5
+BEAT_RATE_SEC = 3
 
 # if the beat is not sent back after this time
 # the node is set as inactive
