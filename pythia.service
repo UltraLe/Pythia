@@ -1,0 +1,9 @@
+[Unit]
+Description=Simple systemd service for Pythia.
+
+[Service]Type=simple
+WorkingDirectory=/home/ec2-user/Pythia
+ExecStart=/usr/bin/python3 /home/ec2-user/Pythia/startBootstrap.py
+
+[Install]
+WantedBy=multi-user.target
