@@ -19,7 +19,7 @@ MAX_IGNORED_BEATS = 2
 inactive_nodes = {}
 
 FLOOD_INTERVAL = 5
-BOOTSTRAP_DOMAIN_NAME = "www.whatacoolbootstrapip.it"
+BOOTSTRAP_DOMAIN_NAME = "www.pythia.resvag.com"
 ACCEPT_LIST_PORT = 11111
 
 mutexAcceptedNodes = threading.Lock()
@@ -363,15 +363,10 @@ def flood_node_list():
     import subprocess
 
     while True:
-        # a = subprocess.check_output("dig +short "+BOOTSTRAP_DOMAIN_NAME, shell=True)
-        # b = a.splitlines()
-        # bootstrapIpList = b[:-1]
-        #
-        bootstrapIpList = {"10.42.0.2", "10.42.0.1"}
-        # test raspberry and pc
-
-        # myip = subprocess.check_output("dig +short myip.opendns.com @resolver1.opendns.com", shell=True)
-        myip = "10.42.0.1"
+        a = subprocess.check_output("dig +short "+BOOTSTRAP_DOMAIN_NAME, shell=True)
+        b = a.splitlines()
+        bootstrapIpList = b[:-1]
+        myip = subprocess.check_output("dig +short myip.opendns.com @resolver1.opendns.com", shell=True)
 
         for bootStrapIP in bootstrapIpList:
             if bootStrapIP == myip:
