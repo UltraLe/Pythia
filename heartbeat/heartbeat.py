@@ -363,10 +363,10 @@ def flood_node_list():
     import subprocess
 
     while True:
-        a = subprocess.check_output("dig +short "+BOOTSTRAP_DOMAIN_NAME, shell=True)
+        a = subprocess.check_output("dig +short "+BOOTSTRAP_DOMAIN_NAME, shell=True).split("\n")[0]
         b = a.splitlines()
         bootstrapIpList = b[:-1]
-        myip = subprocess.check_output("dig +short myip.opendns.com @resolver1.opendns.com", shell=True)
+        myip = subprocess.check_output("dig +short myip.opendns.com @resolver1.opendns.com", shell=True).split("\n")[0]
 
         for bootStrapIP in bootstrapIpList:
             if bootStrapIP == myip:
