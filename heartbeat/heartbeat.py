@@ -19,7 +19,7 @@ MAX_IGNORED_BEATS = 2
 inactive_nodes = {}
 
 FLOOD_INTERVAL = 5
-BOOTSTRAP_DOMAIN_NAME = "www.pythia.resvag.com"
+BOOTSTRAP_DOMAIN_NAME = "pythia-resvag.cloudns.cl"
 ACCEPT_LIST_PORT = 11111
 
 mutexAcceptedNodes = threading.Lock()
@@ -345,9 +345,11 @@ def fog_nodes_list_request(bootstrapip, bootstrapport, numFogNodes, clientlat, c
     listRequest = BootstrapRequest(REQ_LIST, bootstrapip, clientlat, clientlon, numFogNodes, None)
     jsonListRequest = json.dumps(listRequest.__dict__)
 
+    print("IP found: {}".format(bootstrapip))
     s.connect((bootstrapip, bootstrapport))
+    print("connected")
     s.send(jsonListRequest.encode("utf-8"))
-
+    print("Request sent")
     response = s.recv(2048)
     decoded = response.decode("UTF-8")
     print("List received: \n" + decoded)
@@ -363,13 +365,8 @@ def flood_node_list():
     import subprocess
 
     while True:
-        bootstrapDomainList = subprocess.check_output("dig +short "+BOOTSTRAP_DOMAIN_NAME, shell=True).decode("utf-8").split("\n")
-        bootstrapIpList = []
-        for domain in bootstrapDomainList:
-            ip = subprocess.check_output("dig +short %s @resolver1.opendns.com" % domain, shell=True).decode("utf-8").split("\n")[0]
-            bootstrapIpList.append(ip)
-
-        myip = subprocess.check_output("dig +short myip.opendns.com @resolver1.opendns.com", shell=True).splitlines()[0]
+        bootstrapIpList = subprocess.check_output("dig +short "+BOOTSTRAP_DOMAIN_NAME, shell=True).decode("utf-8").split("\n")[:-1]
+        myip = subprocess.check_output("dig +short myip.opendns.com @resolver1.opendns.com", shell=True).decode("utf-8").split("\n")[0]
 
         for bootStrapIP in bootstrapIpList:
             if bootStrapIP == myip:
