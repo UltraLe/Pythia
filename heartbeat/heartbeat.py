@@ -368,6 +368,8 @@ def flood_node_list():
         bootstrapIpList = subprocess.check_output("dig +short "+BOOTSTRAP_DOMAIN_NAME, shell=True).decode("utf-8").split("\n")[:-1]
         myip = subprocess.check_output("dig +short myip.opendns.com @resolver1.opendns.com", shell=True).decode("utf-8").split("\n")[0]
 
+        print("List of bootraps: {}, my ip: {}".format(bootstrapIpList, myip))
+
         for bootStrapIP in bootstrapIpList:
             if bootStrapIP == myip:
                 continue
