@@ -24,7 +24,7 @@ CLIENT_TIMEOUT_SEC = BEAT_RATE_SEC / 2
 # key = ip:port, value = num of beat ignored
 inactive_nodes = {}
 
-FLOOD_INTERVAL = 5
+FLOOD_INTERVAL = 20
 BOOTSTRAP_DOMAIN_NAME = "pythia-resvag.cloudns.cl"
 ACCEPT_LIST_PORT = 11111
 
@@ -355,6 +355,7 @@ def fog_nodes_list_request(bootstrapip, bootstrapport, numFogNodes, clientlat, c
     s.send(jsonListRequest.encode("utf-8"))
     response = s.recv(2048)
     decoded = response.decode("UTF-8")
+    print("Node list: {}".format(decoded))
     s.close()
 
 
