@@ -2,23 +2,20 @@ import threading
 
 import sys
 sys.path.insert(1, '/home/ec2-user/Pythia')
-from heartbeat.heartbeat import join_bootstrap
+from heartbeat.heartbeat import join_bootstrap, ACCEPT_LIST_PORT
 
-# port used by bootstrap to accept new nodes
-# and send the list of the registered nodes
-ACCEPT_LIST_PORT = 11111
-REAL_IP = "127.0.0.1"
+boot_ip = "127.0.0.1"
 
 def n1():
-    join_bootstrap(25, REAL_IP, "1234.234", "3234.243", "127.0.0.1", ACCEPT_LIST_PORT,
+    join_bootstrap(25, "127.0.0.1", "1234.234", "3234.243", boot_ip, ACCEPT_LIST_PORT,
                    8234, 10)
 
 def n2():
-    join_bootstrap(25, REAL_IP, "2234.234", "5234.243", "127.0.0.1", ACCEPT_LIST_PORT,
+    join_bootstrap(25, "127.0.0.1", "2234.234", "5234.243", boot_ip, ACCEPT_LIST_PORT,
                    8321, 10)
 
 def n3():
-    join_bootstrap(25, REAL_IP, "1214.234", "1114.243", "127.0.0.1", ACCEPT_LIST_PORT,
+    join_bootstrap(25, "127.0.0.1", "1214.234", "1114.243", boot_ip, ACCEPT_LIST_PORT,
                    8555, 10)
 
 

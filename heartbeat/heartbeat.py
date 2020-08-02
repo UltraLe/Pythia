@@ -15,6 +15,12 @@ FLOOD_INFO = "FLOODING"
 RESPONSE_ADDED = "ADDED"
 MAX_IGNORED_BEATS = 2
 
+# time interval used to send beat to a server
+BEAT_RATE_SEC = 3
+# if the beat is not sent back after this time
+# the node is set as inactive
+CLIENT_TIMEOUT_SEC = BEAT_RATE_SEC / 2
+
 # key = ip:port, value = num of beat ignored
 inactive_nodes = {}
 
@@ -345,14 +351,10 @@ def fog_nodes_list_request(bootstrapip, bootstrapport, numFogNodes, clientlat, c
     listRequest = BootstrapRequest(REQ_LIST, bootstrapip, clientlat, clientlon, numFogNodes, None)
     jsonListRequest = json.dumps(listRequest.__dict__)
 
-    print("IP found: {}".format(bootstrapip))
     s.connect((bootstrapip, bootstrapport))
-    print("connected")
     s.send(jsonListRequest.encode("utf-8"))
-    print("Request sent")
     response = s.recv(2048)
     decoded = response.decode("UTF-8")
-    print("List received: \n" + decoded)
     s.close()
 
 
